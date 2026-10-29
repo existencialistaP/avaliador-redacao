@@ -1,3 +1,5 @@
+import { extrairJson } from "./avaliacao.ts";
+
 export type Provedor = {
   id: string;
   nome: string;
@@ -172,9 +174,29 @@ export function chaveDoAmbiente(p: Provedor): string | undefined {
 export type ResultadoChamada = { texto: string; provedor: Provedor; modelo: string };
 
 /**
- * Tenta o modelo pedido e, se o provedor estiver sobrecarregado (429/5xx),
+ * Um modelo grátis às vezes devolve JSON sem os critérios pedidos. Isso não é nota legítima:
+ * conta como falha e a cadeia tenta o próximo, em vez de entregar 0 ao usuário.
+ */
+function avaliacaoUtil(resposta: string): boolean {
+  try {
+    const dados = extrairJson(resposta);
+    if (typeof dados !== "object" || dados === null || !("criterios" in dados)) return false;
+    const criterios = dados.criterios;
+    if (!Array.isArray(criterios) || criterios.length === 0) return false;
+    return criterios.some((c) => {
+      if (typeof c !== "object" || c === null || !("valor" in c)) return false;
+      const valor = c.valor;
+      return typeof valor === "number" && Number.isFinite(valor);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Tenta o modelo pedido e, se o provedor falhar (429/5xx ou resposta inutilizável),
  * cai para os outros modelos do mesmo provedor e depois para outros provedores
- * que tenham chave no servidor. Erro de configuração (400/401/403) para na hora.
+ * que tenham chave no servidor. Erro de configuração (400/401/403) no modelo pedido para na hora.
  */
 export async function chamarComFallback(opcoes: {
   provedor: Provedor;
@@ -214,6 +236,10 @@ export async function chamarComFallback(opcoes: {
         usuario: opcoes.usuario,
         imagem: opcoes.imagem,
       });
+      if (!avaliacaoUtil(texto)) {
+        falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos`);
+        continue;
+      }
       return { texto, provedor: t.provedor, modelo: t.modelo };
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e);
