@@ -255,7 +255,7 @@ export async function chamarComFallback(opcoes: {
         sistema: opcoes.sistema,
         usuario: opcoes.usuario,
         imagem: opcoes.imagem,
-        timeoutMs: Math.min(120_000, restante),
+        timeoutMs: Math.min(60_000, restante),
       });
       if (!avaliacaoUtil(texto)) {
         falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos — ${texto.slice(0, 160)}`);

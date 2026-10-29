@@ -10,6 +10,23 @@ export type Entrada = {
 
 export const ESQUEMA_SAIDA = `Responda APENAS com um objeto JSON, sem markdown, sem comentários, neste formato:
 {
+  "temaIdentificado": string,
+  "linhasContadas": number,
+  "anulacao": { "aplicavel": boolean, "motivos": string[] },
+  "criterios": [
+    { "id": string, "valor": number, "justificativa": string, "evidencias": string[], "comoMelhorar": string }
+  ],
+  "diagnosticoGeral": string,
+  "pontosFortes": string[],
+  "pontosFracos": string[],
+  "planoDeMelhoria": string[],
+  "reescritaTrecho": { "original": string, "sugestao": string },
+  "estimativaConfianca": number
+}`;
+
+/** Variante usada só quando a redação vem em imagem: aí a transcrição é obrigatória. */
+export const ESQUEMA_SAIDA_IMAGEM = `Responda APENAS com um objeto JSON, sem markdown, sem comentários, neste formato:
+{
   "transcricao": string,
   "temaIdentificado": string,
   "linhasContadas": number,
@@ -61,11 +78,14 @@ export function montarPrompt(e: Entrada): { sistema: string; usuario: string } {
     ...e.genero.erros.map((s) => `- ${s}`),
     "",
     escala,
-    "evidencias: 1 a 4 trechos literais curtos (máx. 25 palavras cada) que justificam o valor.",
+    "evidencias: 1 a 3 trechos literais curtos (máx. 20 palavras cada) que justificam o valor.",
     "comoMelhorar: instrução acionável e concreta (o que reescrever e como), não conselho vago.",
     "estimativaConfianca: 0 a 1, sua confiança na leitura (reduza se a imagem estiver ilegível ou o texto ambíguo).",
     "",
-    ESQUEMA_SAIDA,
+    "SEJA CONCISO — o JSON precisa caber na resposta: justificativa com no máximo 40 palavras, diagnosticoGeral no máximo 60, planoDeMelhoria com no máximo 4 itens curtos.",
+    "NUNCA copie a redação inteira em nenhum campo. O campo redação já é conhecido pelo sistema.",
+    "",
+    e.texto ? ESQUEMA_SAIDA : ESQUEMA_SAIDA_IMAGEM,
   ].join("\n");
 
   const partes = [
