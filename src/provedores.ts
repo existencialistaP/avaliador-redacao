@@ -75,6 +75,8 @@ export type PedidoModelo = {
   usuario: string;
   imagem?: string;
   maxTokens?: number;
+  /** Orçamento de tempo desta chamada. Modelos :free podem demorar; a cadeia inteira precisa caber. */
+  timeoutMs?: number;
 };
 
 /** Erro de provedor com o status HTTP, para separar falha passageira de erro de configuração. */
@@ -142,7 +144,7 @@ export async function chamarModelo(p: PedidoModelo): Promise<string> {
         "X-Title": "Avaliador de Redacao",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(p.timeoutMs ?? 120_000),
     });
 
   let resp = await enviar(corpo);
@@ -197,6 +199,9 @@ function avaliacaoUtil(resposta: string): boolean {
  * Tenta o modelo pedido e, se o provedor falhar (429/5xx ou resposta inutilizável),
  * cai para os outros modelos do mesmo provedor e depois para outros provedores
  * que tenham chave no servidor. Erro de configuração (400/401/403) no modelo pedido para na hora.
+ *
+ * `orcamentoMs` limita a cadeia inteira: sem isso, 5 modelos :free lentos passam de 10 min
+ * e o navegador do usuário desiste antes da resposta.
  */
 export async function chamarComFallback(opcoes: {
   provedor: Provedor;
@@ -206,7 +211,11 @@ export async function chamarComFallback(opcoes: {
   usuario: string;
   imagem?: string;
   baseUrlDe: (p: Provedor) => string;
+  orcamentoMs?: number;
+  maxTentativas?: number;
 }): Promise<ResultadoChamada> {
+  const orcamentoMs = opcoes.orcamentoMs ?? 150_000;
+  const limite = Date.now() + orcamentoMs;
   const precisaVisao = Boolean(opcoes.imagem);
   const tentativas: { provedor: Provedor; modelo: string; apiKey: string }[] = [
     { provedor: opcoes.provedor, modelo: opcoes.modelo, apiKey: opcoes.apiKey },
@@ -225,8 +234,15 @@ export async function chamarComFallback(opcoes: {
     }
   }
 
+  const maxTentativas = opcoes.maxTentativas ?? 4;
   const falhas: string[] = [];
-  for (const [indice, t] of tentativas.entries()) {
+
+  for (const [indice, t] of tentativas.slice(0, maxTentativas).entries()) {
+    const restante = limite - Date.now();
+    if (restante < 5_000) {
+      falhas.push("orçamento de tempo esgotado antes da próxima tentativa");
+      break;
+    }
     try {
       const texto = await chamarModelo({
         baseUrl: opcoes.baseUrlDe(t.provedor),
@@ -235,6 +251,7 @@ export async function chamarComFallback(opcoes: {
         sistema: opcoes.sistema,
         usuario: opcoes.usuario,
         imagem: opcoes.imagem,
+        timeoutMs: Math.min(120_000, restante),
       });
       if (!avaliacaoUtil(texto)) {
         falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos`);
@@ -251,5 +268,5 @@ export async function chamarComFallback(opcoes: {
     }
   }
 
-  throw new ErroProvedor(`Todos os modelos gratuitos falharam por sobrecarga. Tentativas: ${falhas.join(" | ")}`, 503);
+  throw new ErroProvedor(`Nenhum modelo gratuito respondeu a tempo. Tentativas: ${falhas.join(" | ")}`, 503);
 }
