@@ -83,6 +83,13 @@ Regras objetivas aplicadas no servidor, não delegadas ao modelo: anulação ENE
 
 Os três falam o mesmo protocolo (OpenAI `chat/completions`), então `src/provedores.ts` cobre os três com um único cliente. Para manuscrito, Gemini costuma ler melhor; Groq é o mais rápido; OpenRouter tem o melhor modelo aberto de visão (`nemotron-3.5-super-vl`, contexto 1M).
 
+### O que foi medido na prática (2026-10-29)
+
+- **Gemini free é o único confiável para JSON estruturado**: respostas em 25–80 s, com 429/503 ocasionais que o fallback contorna.
+- **Modelos `:free` do OpenRouter truncam a resposta** com frequência (o nemotron gasta o orçamento de tokens raciocinando e corta o JSON no meio). Em 6 tentativas, 5 caíram para o Gemini.
+- **429 no free tier é por minuto, não por dia**: rajada de testes estoura o RPM/TPM e volta em ~1 min. O app traduz isso numa mensagem legível.
+- Cadeia de fallback: modelo pedido → um modelo de cada outro provedor com chave → demais modelos. Orçamento total 240 s, 120 s por tentativa, 3 tentativas.
+
 ## Estrutura
 
 ```

@@ -240,6 +240,7 @@ export async function chamarComFallback(opcoes: {
 
   const maxTentativas = opcoes.maxTentativas ?? 3;
   const falhas: string[] = [];
+  let statusFinal = 503;
 
   for (const [indice, t] of tentativas.slice(0, maxTentativas).entries()) {
     const restante = limite - Date.now();
@@ -265,6 +266,7 @@ export async function chamarComFallback(opcoes: {
     } catch (e) {
       const mensagem = e instanceof Error ? e.message : String(e);
       falhas.push(`${t.provedor.nome}/${t.modelo}: ${mensagem}`);
+      if (e instanceof ErroProvedor) statusFinal = e.status;
       // Erro de configuração no que o usuário pediu: reporta já, sem gastar os outros.
       // Nos demais, só falha de configuração não impede tentar outro provedor (chave diferente).
       const transitorio = e instanceof ErroProvedor ? e.transitorio : false;
@@ -272,5 +274,20 @@ export async function chamarComFallback(opcoes: {
     }
   }
 
-  throw new ErroProvedor(`Nenhum modelo gratuito respondeu a tempo. Tentativas: ${falhas.join(" | ")}`, 503);
+  throw new ErroProvedor(`Nenhum modelo gratuito respondeu a tempo. Tentativas: ${falhas.join(" | ")}`, statusFinal);
+}
+
+/** Traduz o status do provedor numa mensagem acionável para o usuário final. */
+export function mensagemAmigavel(erro: unknown): string {
+  if (!(erro instanceof ErroProvedor)) return erro instanceof Error ? erro.message : String(erro);
+  if (erro.status === 429) {
+    return "Limite do plano gratuito atingido (429). Espere cerca de 1 minuto e tente de novo; se persistir, a cota do dia acabou.";
+  }
+  if (erro.status === 503) {
+    return "O provedor está sobrecarregado agora (503) e nenhum modelo alternativo respondeu. Tente em alguns minutos.";
+  }
+  if (erro.status === 401 || erro.status === 403) {
+    return "Chave de API recusada (401/403). Confira a variável de ambiente do provedor escolhido.";
+  }
+  return erro.message;
 }

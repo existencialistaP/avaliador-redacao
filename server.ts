@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { normalizar } from "./src/avaliacao.ts";
-import { baseUrlDe, buscarProvedor, chamarComFallback, PROVEDORES, type Provedor } from "./src/provedores.ts";
+import { baseUrlDe, buscarProvedor, chamarComFallback, ErroProvedor, mensagemAmigavel, PROVEDORES, type Provedor } from "./src/provedores.ts";
 import { montarPrompt } from "./src/prompt.ts";
 import { buscarGenero, generosDe, MODALIDADES, type Modalidade } from "./src/regras.ts";
 
@@ -147,8 +147,7 @@ async function avaliar(req: Request): Promise<Response> {
       baseUrlDe,
     });
   } catch (e) {
-    const detalhe = e instanceof Error ? e.message : String(e);
-    return erro(`Falha ao chamar ${provedor.nome}: ${detalhe}`, 502, req);
+    return erro(mensagemAmigavel(e), e instanceof ErroProvedor && e.status === 429 ? 429 : 502, req);
   }
 
   return json({
