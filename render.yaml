@@ -1,0 +1,22 @@
+# Blueprint do Render: sobe só a API, usando o Dockerfile do repo.
+# No Render: New > Blueprint, aponte para este repositório, preencha as chaves.
+services:
+  - type: web
+    name: avaliador-redacao-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/config
+    envVars:
+      - key: SERVE_FRONT
+        value: "false"
+      # Preencha com a URL do front publicado (sem barra no fim).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

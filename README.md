@@ -30,23 +30,32 @@ SERVE_FRONT=false CORS_ORIGINS=https://meu-avaliador.pages.dev GEMINI_API_KEY=..
 
 Com Docker: `docker build -t avaliador . && docker run -p 8080:8080 -e GEMINI_API_KEY=... -e CORS_ORIGINS=... avaliador` (o `Dockerfile` já vem com `SERVE_FRONT=false` e porta 8080).
 
-**Passo 2 — Front.** Publique só a pasta `public/` e aponte para a API de um dos dois jeitos:
+**Passo 2 — Front no GitHub Pages.** O workflow `.github/workflows/pages.yml` já publica `public/` a cada push em `master`. Falta só uma coisa: apontar para a API.
 
-- editar `window.API_BASE = "https://sua-api.onrender.com";` no `<head>` de `index.html`; ou
-- abrir com `https://meu-avaliador.pages.dev/?api=https://sua-api.onrender.com` (o parâmetro vence).
+1. Settings → Secrets and variables → Actions → **Variables** → New variable `API_BASE` = `https://sua-api.onrender.com` (sem barra no fim).
+2. Actions → "Deploy front (GitHub Pages)" → Run workflow.
+
+O workflow injeta a variável no `window.API_BASE` do `index.html`. Sem ela o site sobe, mas mostra o aviso de configurar. Também dá para sobrescrever na hora com `?api=https://sua-api.onrender.com`.
+
+E na API, `CORS_ORIGINS` precisa conter `https://SEU-USUARIO.github.io` (a origem, sem o caminho do repo).
 
 Sem `CORS_ORIGINS` a API recusa origem de navegador diferente da própria, devolvendo 403 — de propósito: sem isso qualquer site gastaria a sua chave. Chamada sem `Origin` (curl, server-to-server) continua livre.
 
-### Providência de deploy por provedor
+### Onde hospedar cada peça
 
-| Host | API | Front | Observações |
+| Host | API | Front | Free tier real |
 |---|---|---|---|
-| Render (Web Service) | ✅ | — | plano free hiberna; runtime Docker ou Bun |
-| Railway / Fly.io | ✅ | — | free tier limitado; Fly precisa de `fly.toml` com `internal_port = 8080` |
-| Cloudflare Pages | — | ✅ | arraste `public/`; grátis e sem build |
-| Netlify / Vercel (static) | — | ✅ | idem, só estático |
-| Vercel/Netlify Functions | ⚠️ | — | timeout curto demais para avaliação de 10–60 s |
+| **Render** (Docker/web service) | ✅ | ✅ estático | 750 h/mês por workspace, 512 MB, sem cartão; hiberna após 15 min sem tráfego e leva ~1 min para acordar |
+| **Koyeb** | ✅ | — | 1 instância free (512 MB, 0.1 vCPU), sem cartão; escala para zero após 1 h sem tráfego |
+| GitHub Pages | — | ✅ | grátis, sem build, publicado por workflow |
+| Cloudflare Pages / Netlify / Vercel static | — | ✅ | estático grátis |
+| Railway | ⚠️ | — | $1/mês de crédito após o 1º mês: não mantém serviço no ar |
+| Fly.io | ❌ | — | sem free tier para contas novas desde 2024; cartão obrigatório |
+| Vercel/Netlify Functions | ⚠️ | — | timeout de função curto demais para avaliação de 10–60 s |
+| Cloudflare Workers | ❌ | — | 10 ms de CPU por invocação no free; não serve para esperar LLM |
 | VPS + Caddy/nginx | ✅ | ✅ | uma máquina serve os dois; dispensa CORS |
+
+**Recomendação:** API no Render (Docker, plano free, `render.yaml` já no repo) + front no GitHub Pages (workflow já no repo). Nenhum dos dois pede cartão. O primeiro acesso depois de 15 min parados espera ~1 min de cold start.
 
 Se API e front ficarem no mesmo host (VPS), não precisa de CORS nem de `?api`: o caminho padrão de mesma origem já funciona.
 
