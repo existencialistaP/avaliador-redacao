@@ -217,22 +217,26 @@ export async function chamarComFallback(opcoes: {
   const orcamentoMs = opcoes.orcamentoMs ?? 150_000;
   const limite = Date.now() + orcamentoMs;
   const precisaVisao = Boolean(opcoes.imagem);
+
+  // Ordem importa: o modelo pedido, depois um modelo de cada outro provedor com chave
+  // (provedor diferente tem chance real de estar no ar), e só então os demais modelos.
+  const doMesmoProvedor = opcoes.provedor.modelos.filter(
+    (m) => m.id !== opcoes.modelo && (!precisaVisao || m.visao),
+  );
+  const deOutrosProvedores = PROVEDORES.filter((p) => p.id !== opcoes.provedor.id)
+    .map((p) => ({ provedor: p, chave: chaveDoAmbiente(p) }))
+    .filter((x): x is { provedor: Provedor; chave: string } => Boolean(x.chave))
+    .flatMap((p) =>
+      p.provedor.modelos
+        .filter((m) => !precisaVisao || m.visao)
+        .map((m) => ({ provedor: p.provedor, modelo: m.id, apiKey: p.chave })),
+    );
+
   const tentativas: { provedor: Provedor; modelo: string; apiKey: string }[] = [
     { provedor: opcoes.provedor, modelo: opcoes.modelo, apiKey: opcoes.apiKey },
+    ...deOutrosProvedores,
+    ...doMesmoProvedor.map((m) => ({ provedor: opcoes.provedor, modelo: m.id, apiKey: opcoes.apiKey })),
   ];
-
-  for (const m of opcoes.provedor.modelos) {
-    if (m.id !== opcoes.modelo && (!precisaVisao || m.visao)) {
-      tentativas.push({ provedor: opcoes.provedor, modelo: m.id, apiKey: opcoes.apiKey });
-    }
-  }
-  for (const p of PROVEDORES) {
-    const chave = p.id === opcoes.provedor.id ? undefined : chaveDoAmbiente(p);
-    if (!chave) continue;
-    for (const m of p.modelos) {
-      if (!precisaVisao || m.visao) tentativas.push({ provedor: p, modelo: m.id, apiKey: chave });
-    }
-  }
 
   const maxTentativas = opcoes.maxTentativas ?? 4;
   const falhas: string[] = [];
@@ -254,7 +258,7 @@ export async function chamarComFallback(opcoes: {
         timeoutMs: Math.min(120_000, restante),
       });
       if (!avaliacaoUtil(texto)) {
-        falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos`);
+        falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos — ${texto.slice(0, 160)}`);
         continue;
       }
       return { texto, provedor: t.provedor, modelo: t.modelo };
