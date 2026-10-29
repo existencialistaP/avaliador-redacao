@@ -206,6 +206,8 @@ const SERVIR_FRONT = process.env.SERVE_FRONT !== "false";
 
 Bun.serve({
   port: PORTA,
+  // Modelos gratuitos podem levar minutos; o default de 10 s derruba a conexão antes da resposta.
+  idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url);
 

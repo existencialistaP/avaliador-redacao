@@ -214,7 +214,7 @@ export async function chamarComFallback(opcoes: {
   orcamentoMs?: number;
   maxTentativas?: number;
 }): Promise<ResultadoChamada> {
-  const orcamentoMs = opcoes.orcamentoMs ?? 150_000;
+  const orcamentoMs = opcoes.orcamentoMs ?? 240_000;
   const limite = Date.now() + orcamentoMs;
   const precisaVisao = Boolean(opcoes.imagem);
 
@@ -238,7 +238,7 @@ export async function chamarComFallback(opcoes: {
     ...doMesmoProvedor.map((m) => ({ provedor: opcoes.provedor, modelo: m.id, apiKey: opcoes.apiKey })),
   ];
 
-  const maxTentativas = opcoes.maxTentativas ?? 4;
+  const maxTentativas = opcoes.maxTentativas ?? 3;
   const falhas: string[] = [];
 
   for (const [indice, t] of tentativas.slice(0, maxTentativas).entries()) {
@@ -255,7 +255,7 @@ export async function chamarComFallback(opcoes: {
         sistema: opcoes.sistema,
         usuario: opcoes.usuario,
         imagem: opcoes.imagem,
-        timeoutMs: Math.min(60_000, restante),
+        timeoutMs: Math.min(120_000, restante),
       });
       if (!avaliacaoUtil(texto)) {
         falhas.push(`${t.provedor.nome}/${t.modelo}: resposta sem critérios válidos — ${texto.slice(0, 160)}`);
