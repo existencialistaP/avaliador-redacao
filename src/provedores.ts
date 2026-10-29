@@ -75,6 +75,22 @@ export type PedidoModelo = {
   maxTokens?: number;
 };
 
+/** Erro de provedor com o status HTTP, para separar falha passageira de erro de configuração. */
+export class ErroProvedor extends Error {
+  readonly status: number;
+
+  constructor(mensagem: string, status: number) {
+    super(mensagem);
+    this.name = "ErroProvedor";
+    this.status = status;
+  }
+
+  /** 429/5xx: vale tentar outro modelo. 400/401/403/404: repetir não adianta. */
+  get transitorio(): boolean {
+    return this.status === 429 || this.status >= 500;
+  }
+}
+
 /** Lê choices[0].message.content de uma resposta OpenAI-compatible sem confiar no formato. */
 function extrairConteudo(dados: unknown): string | undefined {
   if (typeof dados !== "object" || dados === null || !("choices" in dados)) return undefined;
@@ -138,12 +154,76 @@ export async function chamarModelo(p: PedidoModelo): Promise<string> {
   }
 
   if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status} do provedor: ${bruto.slice(0, 600)}`);
+    throw new ErroProvedor(`HTTP ${resp.status}: ${bruto.slice(0, 400)}`, resp.status);
   }
 
   const texto = extrairConteudo(JSON.parse(bruto));
   if (!texto) {
-    throw new Error(`Resposta sem conteúdo: ${bruto.slice(0, 300)}`);
+    throw new ErroProvedor(`Resposta sem conteúdo: ${bruto.slice(0, 300)}`, 502);
   }
   return texto;
+}
+
+/** Chave do ambiente para um provedor, se existir. */
+export function chaveDoAmbiente(p: Provedor): string | undefined {
+  return process.env[p.envKey]?.trim() || undefined;
+}
+
+export type ResultadoChamada = { texto: string; provedor: Provedor; modelo: string };
+
+/**
+ * Tenta o modelo pedido e, se o provedor estiver sobrecarregado (429/5xx),
+ * cai para os outros modelos do mesmo provedor e depois para outros provedores
+ * que tenham chave no servidor. Erro de configuração (400/401/403) para na hora.
+ */
+export async function chamarComFallback(opcoes: {
+  provedor: Provedor;
+  modelo: string;
+  apiKey: string;
+  sistema: string;
+  usuario: string;
+  imagem?: string;
+  baseUrlDe: (p: Provedor) => string;
+}): Promise<ResultadoChamada> {
+  const precisaVisao = Boolean(opcoes.imagem);
+  const tentativas: { provedor: Provedor; modelo: string; apiKey: string }[] = [
+    { provedor: opcoes.provedor, modelo: opcoes.modelo, apiKey: opcoes.apiKey },
+  ];
+
+  for (const m of opcoes.provedor.modelos) {
+    if (m.id !== opcoes.modelo && (!precisaVisao || m.visao)) {
+      tentativas.push({ provedor: opcoes.provedor, modelo: m.id, apiKey: opcoes.apiKey });
+    }
+  }
+  for (const p of PROVEDORES) {
+    const chave = p.id === opcoes.provedor.id ? undefined : chaveDoAmbiente(p);
+    if (!chave) continue;
+    for (const m of p.modelos) {
+      if (!precisaVisao || m.visao) tentativas.push({ provedor: p, modelo: m.id, apiKey: chave });
+    }
+  }
+
+  const falhas: string[] = [];
+  for (const [indice, t] of tentativas.entries()) {
+    try {
+      const texto = await chamarModelo({
+        baseUrl: opcoes.baseUrlDe(t.provedor),
+        modelo: t.modelo,
+        apiKey: t.apiKey,
+        sistema: opcoes.sistema,
+        usuario: opcoes.usuario,
+        imagem: opcoes.imagem,
+      });
+      return { texto, provedor: t.provedor, modelo: t.modelo };
+    } catch (e) {
+      const mensagem = e instanceof Error ? e.message : String(e);
+      falhas.push(`${t.provedor.nome}/${t.modelo}: ${mensagem}`);
+      // Erro de configuração no que o usuário pediu: reporta já, sem gastar os outros.
+      // Nos demais, só falha de configuração não impede tentar outro provedor (chave diferente).
+      const transitorio = e instanceof ErroProvedor ? e.transitorio : false;
+      if (indice === 0 && !transitorio) throw e;
+    }
+  }
+
+  throw new ErroProvedor(`Todos os modelos gratuitos falharam por sobrecarga. Tentativas: ${falhas.join(" | ")}`, 503);
 }

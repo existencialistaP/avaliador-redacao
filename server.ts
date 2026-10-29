@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { normalizar } from "./src/avaliacao.ts";
-import { baseUrlDe, buscarProvedor, chamarModelo, PROVEDORES } from "./src/provedores.ts";
+import { baseUrlDe, buscarProvedor, chamarComFallback, PROVEDORES, type Provedor } from "./src/provedores.ts";
 import { montarPrompt } from "./src/prompt.ts";
 import { buscarGenero, generosDe, MODALIDADES, type Modalidade } from "./src/regras.ts";
 
@@ -135,15 +135,16 @@ async function avaliar(req: Request): Promise<Response> {
   });
   const inicio = Date.now();
 
-  let respostaCrua: string;
+  let resultado: { texto: string; provedor: Provedor; modelo: string };
   try {
-    respostaCrua = await chamarModelo({
-      baseUrl: baseUrlDe(provedor),
+    resultado = await chamarComFallback({
+      provedor,
       modelo,
       apiKey,
       sistema,
       usuario,
       imagem,
+      baseUrlDe,
     });
   } catch (e) {
     const detalhe = e instanceof Error ? e.message : String(e);
@@ -151,13 +152,14 @@ async function avaliar(req: Request): Promise<Response> {
   }
 
   return json({
-    avaliacao: normalizar({ modalidade, linhasMax, texto, respostaCrua }),
+    avaliacao: normalizar({ modalidade, linhasMax, texto, respostaCrua: resultado.texto }),
     meta: {
-      provedor: provedor.nome,
-      modelo,
+      provedor: resultado.provedor.nome,
+      modelo: resultado.modelo,
       ms: Date.now() - inicio,
       genero: genero.nome,
       entrada: texto ? "texto" : "imagem",
+      fallback: resultado.provedor.id !== provedor.id || resultado.modelo !== modelo,
     },
   }, 200, req);
 }

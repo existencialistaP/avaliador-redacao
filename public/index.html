@@ -309,6 +309,7 @@ function renderizar(a, meta) {
         ${nomeGenero} · ${linhas} · confiança ${(a.confianca * 100).toFixed(0)}% ·
         ${esc(meta.provedor)} / ${esc(meta.modelo)} · ${(meta.ms / 1000).toFixed(1)}s · entrada: ${meta.entrada}
       </p>
+      ${meta.fallback ? `<p class="dica" style="margin:0 0 12px">O modelo escolhido estava indisponível; a correção usou ${esc(meta.modelo)} automaticamente.</p>` : ""}
       ${a.diagnosticoGeral ? `<p>${esc(a.diagnosticoGeral)}</p>` : ""}
       ${a.temaIdentificado ? `<p style="font-size:.85rem;color:var(--muted)">Tema identificado pelo modelo: ${esc(a.temaIdentificado)}</p>` : ""}
     </fieldset>
