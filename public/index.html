@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avaliador de Redação — ENEM / UFPR / Livre</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf8;
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --borda: #ddd8d0;
+    --painel: #fff;
+    --acento: #1f6f4a;
+    --acento-fraco: #e8f2ec;
+    --erro: #a4232b;
+    --aviso: #8a5a00;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --fg: #ececec;
+      --muted: #9a9a95;
+      --borda: #33332f;
+      --painel: #1c1c1a;
+      --acento: #6fd39b;
+      --acento-fraco: #1e2c24;
+      --erro: #ff8a8a;
+      --aviso: #e0b256;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-size: 15px; line-height: 1.5; }
+  main { max-width: 880px; margin: 0 auto; padding: 28px 20px 80px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; }
+  fieldset { border: 1px solid var(--borda); border-radius: 10px; padding: 16px; margin: 0 0 16px; background: var(--painel); }
+  legend { padding: 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+  .linha { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .linha > div { flex: 1 1 180px; min-width: 0; }
+  select, input, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--borda); border-radius: 7px;
+    background: var(--bg); color: var(--fg); font: inherit; font-size: 0.92rem;
+  }
+  textarea { min-height: 200px; resize: vertical; line-height: 1.6; }
+  select:focus, input:focus, textarea:focus { outline: 2px solid var(--acento); outline-offset: 1px; }
+  .contador { font-size: 0.78rem; color: var(--muted); text-align: right; margin-top: 2px; }
+  .contador.fora { color: var(--erro); }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px;
+    border: 1px solid transparent; padding: 10px 18px;
+  }
+  button.primario { background: var(--acento); color: #fff; }
+  @media (prefers-color-scheme: dark) { button.primario { color: #0d0d0d; } }
+  button.primario:disabled { opacity: 0.55; cursor: progress; }
+  button.secundario { background: transparent; color: var(--fg); border-color: var(--borda); }
+  .abas { display: flex; gap: 8px; margin-bottom: 12px; }
+  .aba { flex: 1; padding: 8px; border-radius: 8px; background: transparent; border: 1px solid var(--borda); color: var(--muted); font-weight: 500; }
+  .aba.ativa { background: var(--acento-fraco); color: var(--acento); border-color: var(--acento); font-weight: 600; }
+  .oculto { display: none !important; }
+  .dica { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  #status { margin: 16px 0; padding: 12px 14px; border-radius: 8px; font-size: 0.9rem; border: 1px solid var(--borda); background: var(--painel); }
+  #status.erro { border-color: var(--erro); color: var(--erro); }
+  #status.ok { border-color: var(--acento); color: var(--acento); }
+  #resultado { margin-top: 8px; }
+  .nota { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .nota strong { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.02em; }
+  .nota span { color: var(--muted); }
+  .barra { height: 6px; border-radius: 3px; background: var(--borda); overflow: hidden; margin: 8px 0 18px; }
+  .barra > i { display: block; height: 100%; background: var(--acento); }
+  .alerta { border-left: 3px solid var(--aviso); background: var(--painel); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 0 0 16px; font-size: 0.88rem; }
+  .alerta.anulada { border-color: var(--erro); }
+  .crit { border: 1px solid var(--borda); border-radius: 10px; padding: 14px; margin-bottom: 10px; background: var(--painel); }
+  .crit header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .crit h3 { font-size: 0.95rem; margin: 0 0 6px; }
+  .crit .pts { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+  .crit p { margin: 6px 0; font-size: 0.9rem; }
+  .crit ul { margin: 6px 0 0; padding-left: 20px; font-size: 0.86rem; color: var(--muted); }
+  .crit blockquote { margin: 6px 0 0; padding: 6px 10px; border-left: 2px solid var(--borda); font-size: 0.85rem; color: var(--muted); }
+  .crit .melhorar { font-size: 0.88rem; color: var(--acento); }
+  h2.sec { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 24px 0 8px; }
+  .cols { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  .cols ul { margin: 0; padding-left: 20px; font-size: 0.9rem; }
+  .reescrita { display: grid; gap: 10px; }
+  .reescrita div { padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+  .reescrita .antes { background: color-mix(in srgb, var(--erro) 8%, transparent); }
+  .reescrita .depois { background: var(--acento-fraco); }
+  .reescrita b { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+  details.transcricao { margin-top: 16px; font-size: 0.88rem; }
+  details.transcricao pre { white-space: pre-wrap; font-family: inherit; background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--borda); }
+  .rodape { margin-top: 32px; font-size: 0.76rem; color: var(--muted); border-top: 1px solid var(--borda); padding-top: 12px; }
+  .rodape a { color: var(--acento); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Avaliador de redação</h1>
+  <p class="sub">Cole o texto ou envie uma foto. A correção segue as regras do ENEM 2026 e do edital da UFPR 2027.</p>
+
+  <form id="form">
+    <fieldset>
+      <legend>Banca</legend>
+      <div class="abas" id="abas" role="tablist"></div>
+      <div class="linha">
+        <div>
+          <label for="genero">Gênero / tipo textual</label>
+          <select id="genero" required></select>
+        </div>
+        <div>
+          <label for="limite">Limite de linhas</label>
+          <input id="limite" type="number" min="1" max="30" step="1" required>
+        </div>
+      </div>
+      <div>
+        <label for="tema">Tema / proposta</label>
+        <input id="tema" type="text" placeholder="Ex.: Desafios da mobilidade urbana no Brasil" maxlength="500">
+      </div>
+      <p class="dica" id="dicaBanca"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Redação</legend>
+      <div class="abas">
+        <button type="button" class="aba ativa" data-modo="texto">Colar texto</button>
+        <button type="button" class="aba" data-modo="imagem">Enviar imagem</button>
+      </div>
+      <div id="painelTexto">
+        <textarea id="texto" placeholder="Cole aqui a redação completa, preservando os parágrafos."></textarea>
+        <div class="contador" id="contador">0 linhas</div>
+      </div>
+      <div id="painelImagem" class="oculto">
+        <input id="imagem" type="file" accept="image/png,image/jpeg,image/webp">
+        <p class="dica">Foto nítida, sem sombra, enquadrando só o texto. Manuscrito funciona melhor com boa luz e foco.</p>
+        <img id="previa" alt="" class="oculto" style="max-width:100%;border-radius:8px;margin-top:10px;border:1px solid var(--borda)">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Modelo</legend>
+      <div class="linha">
+        <div>
+          <label for="provedor">Provedor</label>
+          <select id="provedor" required></select>
+        </div>
+        <div>
+          <label for="modelo">Modelo</label>
+          <select id="modelo" required></select>
+        </div>
+      </div>
+      <div>
+        <label for="apiKey">Chave de API</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="Opcional se estiver configurada no servidor">
+      </div>
+      <p class="dica" id="dicaProvedor"></p>
+    </fieldset>
+
+    <button type="submit" class="primario" id="enviar">Avaliar redação</button>
+  </form>
+
+  <div id="status" class="oculto"></div>
+  <section id="resultado"></section>
+
+  <p class="rodape">
+    Fontes: <a href="https://download.inep.gov.br/publicacoes/institucionais/avaliacoes_e_exames_da_educacao_basica/cartilha_enem_2026.pdf" target="_blank" rel="noopener">Cartilha do Participante — ENEM 2026 (INEP)</a>
+    e <a href="https://servicos.nc.ufpr.br/PortalNC/obterDocumento?pub=9363" target="_blank" rel="noopener">Edital 50/2026-NC/PROGRAP — Vestibular UFPR 2027</a>.
+    A nota é uma estimativa automática, não substitui correção humana.
+  </p>
+</main>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const estado = { modalidade: "enem", modo: "texto", config: null };
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+function status(msg, tipo = "") {
+  const el = $("status");
+  el.textContent = msg;
+  el.className = msg ? tipo : "oculto";
+}
+
+function modalidadeAtual() {
+  return estado.config.modalidades.find((m) => m.id === estado.modalidade);
+}
+
+function desenharAbas() {
+  $("abas").innerHTML = estado.config.modalidades
+    .map((m) => `<button type="button" class="aba${m.id === estado.modalidade ? " ativa" : ""}" data-mod="${m.id}">${esc(m.nome)}</button>`)
+    .join("");
+}
+
+function preencherGeneros() {
+  const m = modalidadeAtual();
+  const atual = $("genero").value;
+  $("genero").innerHTML = m.generos.map((g) => `<option value="${esc(g.id)}">${esc(g.nome)}</option>`).join("");
+  if (m.generos.some((g) => g.id === atual)) $("genero").value = atual;
+  sincronizarGenero();
+}
+
+function sincronizarGenero() {
+  const m = modalidadeAtual();
+  const g = m.generos.find((x) => x.id === $("genero").value) ?? m.generos[0];
+  $("limite").max = String(m.linhasMax);
+  $("limite").value = String(Math.min(g?.linhasPadrao ?? m.linhasMax, m.linhasMax));
+  $("dicaBanca").textContent =
+    `${m.fonte}. Máximo ${m.linhasMax} linhas` +
+    (m.linhasMin > 0 ? ` e mínimo ${m.linhasMin} — abaixo disso a redação é anulada` : "") +
+    `; nota total ${m.totalPontos} pontos. ${m.observacao}`;
+}
+
+function preencherProvedores() {
+  const p = estado.config.provedores;
+  $("provedor").innerHTML = p.map((x) => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join("");
+  sincronizarProvedor();
+}
+
+function sincronizarProvedor() {
+  const p = estado.config.provedores.find((x) => x.id === $("provedor").value) ?? estado.config.provedores[0];
+  $("modelo").innerHTML = p.modelos
+    .map((m) => `<option value="${esc(m.id)}">${esc(m.id)}${m.visao ? " (visão)" : ""}</option>`)
+    .join("");
+  $("modelo").value = p.modeloPadrao;
+  const chave = p.temChaveNoServidor
+    ? `Chave já configurada no servidor (${p.envKey}); o campo pode ficar vazio.`
+    : `Sem chave no servidor: cole a sua ou defina ${p.envKey}. ${p.gratuidade}`;
+  $("dicaProvedor").textContent = chave;
+}
+
+function estimarLinhas(t) {
+  // Mesmo critério do servidor: cada parágrafo ocupa ~1 linha manuscrita a cada 78 caracteres.
+  return t.split(/\r?\n/).map((p) => p.trim()).filter(Boolean)
+    .reduce((soma, p) => soma + Math.max(1, Math.ceil(p.length / 78)), 0);
+}
+
+function atualizarContador() {
+  const linhas = estimarLinhas($("texto").value);
+  const max = Number($("limite").value) || 30;
+  const el = $("contador");
+  el.textContent = `~${linhas} linha${linhas === 1 ? "" : "s"} estimada${linhas === 1 ? "" : "s"} · limite ${max}`;
+  el.classList.toggle("fora", linhas > max);
+}
+
+function lerImagem(arquivo) {
+  return new Promise((ok, falha) => {
+    const leitor = new FileReader();
+    leitor.onload = () => ok(String(leitor.result));
+    leitor.onerror = () => falha(new Error("Não consegui ler o arquivo de imagem."));
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+function renderizar(a, meta) {
+  const pct = Math.max(0, Math.min(100, a.percentual));
+  const nota = a.total.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const max = a.totalMaximo.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+
+  const alertas = [];
+  if (a.anulada) {
+    alertas.push(`<div class="alerta anulada"><b>Nota zerada.</b> ${a.motivosAnulacao.map(esc).join(" · ")}</div>`);
+  } else if (a.motivosAnulacao.length) {
+    alertas.push(`<div class="alerta"><b>Atenção:</b> ${a.motivosAnulacao.map(esc).join(" · ")}</div>`);
+  }
+  if (a.excessoLinhas > 0) {
+    alertas.push(`<div class="alerta"><b>${a.excessoLinhas} linha${a.excessoLinhas === 1 ? "" : "s"} acima do limite.</b> O que passar do limite costuma ser desconsiderado pela banca.</div>`);
+  }
+  const nomeGenero = esc(meta.genero);
+  const linhas = `${a.linhasContadas}/${a.limiteLinhas} linhas`;
+
+  const criterios = a.criterios
+    .map((c) => `
+      <article class="crit">
+        <header>
+          <h3>${esc(c.nome)}</h3>
+          <span class="pts">${c.pontos.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} / ${c.maximo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</span>
+        </header>
+        ${c.justificativa ? `<p>${esc(c.justificativa)}</p>` : `<p style="color:var(--muted)">O modelo não justificou este critério.</p>`}
+        ${c.evidencias.length ? `<blockquote>${c.evidencias.map((e) => `“${esc(e)}”`).join(" · ")}</blockquote>` : ""}
+        ${c.comoMelhorar ? `<p class="melhorar">→ ${esc(c.comoMelhorar)}</p>` : ""}
+      </article>`)
+    .join("");
+
+  const lista = (titulo, itens) => itens.length
+    ? `<div><h2 class="sec" style="margin-top:0">${titulo}</h2><ul>${itens.map((i) => `<li>${esc(i)}</li>`).join("")}</ul></div>`
+    : "";
+
+  $("resultado").innerHTML = `
+    <fieldset>
+      <legend>Resultado</legend>
+      <div class="nota">
+        <strong>${nota}</strong><span>/ ${max} pontos · ${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span>
+      </div>
+      <div class="barra"><i style="width:${pct}%"></i></div>
+      ${alertas.join("")}
+      <p style="font-size:.82rem;color:var(--muted);margin:0 0 12px">
+        ${nomeGenero} · ${linhas} · confiança ${(a.confianca * 100).toFixed(0)}% ·
+        ${esc(meta.provedor)} / ${esc(meta.modelo)} · ${(meta.ms / 1000).toFixed(1)}s · entrada: ${meta.entrada}
+      </p>
+      ${a.diagnosticoGeral ? `<p>${esc(a.diagnosticoGeral)}</p>` : ""}
+      ${a.temaIdentificado ? `<p style="font-size:.85rem;color:var(--muted)">Tema identificado pelo modelo: ${esc(a.temaIdentificado)}</p>` : ""}
+    </fieldset>
+
+    <h2 class="sec">Critérios</h2>
+    ${criterios}
+
+    ${a.pontosFortes.length || a.pontosFracos.length ? `<div class="cols">${lista("Pontos fortes", a.pontosFortes)}${lista("Pontos fracos", a.pontosFracos)}</div>` : ""}
+    ${a.planoDeMelhoria.length ? `<h2 class="sec">Plano de melhoria</h2><ol style="padding-left:20px;font-size:.92rem">${a.planoDeMelhoria.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>` : ""}
+    ${a.reescritaTrecho ? `
+      <h2 class="sec">Reescrita sugerida</h2>
+      <div class="reescrita">
+        ${a.reescritaTrecho.original ? `<div class="antes"><b>Original</b>${esc(a.reescritaTrecho.original)}</div>` : ""}
+        ${a.reescritaTrecho.sugestao ? `<div class="depois"><b>Sugestão</b>${esc(a.reescritaTrecho.sugestao)}</div>` : ""}
+      </div>` : ""}
+    ${a.transcricao ? `<details class="transcricao"><summary>Transcrição usada na avaliação</summary><pre>${esc(a.transcricao)}</pre></details>` : ""}
+  `;
+}
+
+async function iniciar() {
+  try {
+    const r = await fetch("/api/config");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    estado.config = await r.json();
+  } catch (e) {
+    status(`Não consegui carregar a configuração: ${e.message}. O servidor está rodando?`, "erro");
+    return;
+  }
+  desenharAbas();
+  preencherGeneros();
+  preencherProvedores();
+  atualizarContador();
+}
+
+$("abas").addEventListener("click", (ev) => {
+  const botao = ev.target.closest("[data-mod]");
+  if (!botao) return;
+  estado.modalidade = botao.dataset.mod;
+  desenharAbas();
+  preencherGeneros();
+});
+
+document.querySelectorAll("[data-modo]").forEach((botao) => {
+  botao.addEventListener("click", () => {
+    estado.modo = botao.dataset.modo;
+    document.querySelectorAll("[data-modo]").forEach((b) => b.classList.toggle("ativa", b === botao));
+    $("painelTexto").classList.toggle("oculto", estado.modo !== "texto");
+    $("painelImagem").classList.toggle("oculto", estado.modo !== "imagem");
+  });
+});
+
+$("genero").addEventListener("change", sincronizarGenero);
+$("limite").addEventListener("input", atualizarContador);
+$("texto").addEventListener("input", atualizarContador);
+$("provedor").addEventListener("change", sincronizarProvedor);
+
+$("imagem").addEventListener("change", async () => {
+  const arquivo = $("imagem").files?.[0];
+  const previa = $("previa");
+  if (!arquivo) {
+    previa.classList.add("oculto");
+    return;
+  }
+  previa.src = await lerImagem(arquivo);
+  previa.classList.remove("oculto");
+});
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("resultado").innerHTML = "";
+  const botao = $("enviar");
+  botao.disabled = true;
+  status("Corrigindo… isso pode levar de 10 a 60 segundos.", "");
+
+  try {
+    const corpo = {
+      modalidade: estado.modalidade,
+      genero: $("genero").value,
+      tema: $("tema").value.trim(),
+      limiteLinhas: Number($("limite").value),
+      provedor: $("provedor").value,
+      modelo: $("modelo").value,
+      apiKey: $("apiKey").value.trim() || undefined,
+    };
+
+    if (estado.modo === "texto") {
+      const texto = $("texto").value.trim();
+      if (texto.length < 20) throw new Error("Cole a redação (mínimo 20 caracteres).");
+      corpo.texto = texto;
+    } else {
+      const arquivo = $("imagem").files?.[0];
+      if (!arquivo) throw new Error("Escolha uma imagem da redação.");
+      if (arquivo.size > 12 * 1024 * 1024) throw new Error("Imagem acima de 12 MB. Reduza ou recorte.");
+      corpo.imagem = await lerImagem(arquivo);
+    }
+
+    const r = await fetch("/api/avaliar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+    const dados = await r.json();
+    if (!r.ok) throw new Error(dados.erro || `HTTP ${r.status}`);
+
+    status("", "");
+    renderizar(dados.avaliacao, dados.meta);
+    $("resultado").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    status(e.message, "erro");
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+iniciar();
+</script>
+</body>
+</html>
