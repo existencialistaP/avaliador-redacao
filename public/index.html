@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Avaliador de Redação — ENEM / UFPR / Livre</title>
+<script>
+  // Front hospedado separado da API: defina a URL da API aqui (ou use ?api=https://... na URL).
+  // Vazio = mesma origem, que é o caso do `bun run start` local.
+  window.API_BASE = "";
+</script>
 <style>
   :root {
     color-scheme: light dark;
@@ -175,6 +180,11 @@
 const $ = (id) => document.getElementById(id);
 const estado = { modalidade: "enem", modo: "texto", config: null };
 
+// Ordem: ?api= na URL > window.API_BASE > mesma origem.
+const parametroApi = new URLSearchParams(location.search).get("api");
+const API = (parametroApi || window.API_BASE || "").replace(/\/+$/, "");
+const apiUrl = (caminho) => `${API}${caminho}`;
+
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 function status(msg, tipo = "") {
@@ -320,11 +330,15 @@ function renderizar(a, meta) {
 
 async function iniciar() {
   try {
-    const r = await fetch("/api/config");
+    const r = await fetch(apiUrl("/api/config"));
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     estado.config = await r.json();
   } catch (e) {
-    status(`Não consegui carregar a configuração: ${e.message}. O servidor está rodando?`, "erro");
+    status(
+      `Não consegui carregar a configuração (${e.message}). ` +
+        (API ? `A API em ${API} está no ar?` : "Se este front está em outro domínio, abra com ?api=https://sua-api."),
+      "erro",
+    );
     return;
   }
   desenharAbas();
@@ -395,7 +409,7 @@ $("form").addEventListener("submit", async (ev) => {
       corpo.imagem = await lerImagem(arquivo);
     }
 
-    const r = await fetch("/api/avaliar", {
+    const r = await fetch(apiUrl("/api/avaliar"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(corpo),

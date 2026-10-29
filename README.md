@@ -5,13 +5,50 @@ Aplicação local: recebe a redação em texto ou foto, o limite de linhas, o g�
 ## Rodar
 
 ```bash
-bun install   # sem dependências externas, só confirma o runtime
-export GEMINI_API_KEY=sua_chave   # grátis em https://aistudio.google.com/apikey
-bun run start                     # http://localhost:8787
+cp .env.example .env    # preencha GEMINI_API_KEY (ou OPENROUTER/GROQ)
+bun run start           # http://localhost:8787
 ```
 
-Não há dependências: `package.json` vazio de propósito, roda no Bun puro.
-A chave pode vir do ambiente (preferível) ou ser colada no formulário a cada avaliação.
+Sem dependências: `package.json` vazio de propósito, roda no Bun puro. O Bun carrega `.env` sozinho — não é preciso exportar nada na mão, e o app nunca imprime o valor da chave. Sem `.env`, a chave pode ser colada no formulário a cada avaliação.
+
+## Deploy com front e API separados
+
+O app já suporta os dois numa máquina só, ou separados:
+
+| Peça | O que é | Onde hospedar |
+|---|---|---|
+| API | `bun run server.ts` com `SERVE_FRONT=false` | Render, Railway, Fly.io, VPS, Cloud Run |
+| Front | `public/index.html` (arquivo estático, zero build) | Cloudflare Pages, Netlify, Vercel, GitHub Pages, S3+CloudFront |
+
+A API precisa de runtime persistente (Node/Bun), então **não** serve Vercel/Netlify Functions como host padrão dela: a avaliação leva 10–60 s, acima do limite típico de função.
+
+**Passo 1 — API.** Suba com `SERVE_FRONT=false` e `CORS_ORIGINS` com a URL exata do front (com `https://`, sem barra no fim; aceita vírgula para várias):
+
+```bash
+SERVE_FRONT=false CORS_ORIGINS=https://meu-avaliador.pages.dev GEMINI_API_KEY=... bun run server.ts
+```
+
+Com Docker: `docker build -t avaliador . && docker run -p 8080:8080 -e GEMINI_API_KEY=... -e CORS_ORIGINS=... avaliador` (o `Dockerfile` já vem com `SERVE_FRONT=false` e porta 8080).
+
+**Passo 2 — Front.** Publique só a pasta `public/` e aponte para a API de um dos dois jeitos:
+
+- editar `window.API_BASE = "https://sua-api.onrender.com";` no `<head>` de `index.html`; ou
+- abrir com `https://meu-avaliador.pages.dev/?api=https://sua-api.onrender.com` (o parâmetro vence).
+
+Sem `CORS_ORIGINS` a API recusa origem de navegador diferente da própria, devolvendo 403 — de propósito: sem isso qualquer site gastaria a sua chave. Chamada sem `Origin` (curl, server-to-server) continua livre.
+
+### Providência de deploy por provedor
+
+| Host | API | Front | Observações |
+|---|---|---|---|
+| Render (Web Service) | ✅ | — | plano free hiberna; runtime Docker ou Bun |
+| Railway / Fly.io | ✅ | — | free tier limitado; Fly precisa de `fly.toml` com `internal_port = 8080` |
+| Cloudflare Pages | — | ✅ | arraste `public/`; grátis e sem build |
+| Netlify / Vercel (static) | — | ✅ | idem, só estático |
+| Vercel/Netlify Functions | ⚠️ | — | timeout curto demais para avaliação de 10–60 s |
+| VPS + Caddy/nginx | ✅ | ✅ | uma máquina serve os dois; dispensa CORS |
+
+Se API e front ficarem no mesmo host (VPS), não precisa de CORS nem de `?api`: o caminho padrão de mesma origem já funciona.
 
 ## Bancas e escalas
 
@@ -48,7 +85,7 @@ src/avaliacao.ts     parsing tolerante do JSON, escala por banca, anulação, co
 public/index.html    UI única (sem build, sem framework)
 ```
 
-Variáveis de ambiente: `PORT`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, e `<PROVIDER>_BASE_URL` para apontar a um proxy/mock.
+Variáveis de ambiente (ver `.env.example`): `PORT`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CORS_ORIGINS`, `SERVE_FRONT`, e `<PROVIDER>_BASE_URL` para apontar a um proxy/mock. O Bun carrega `.env` automaticamente.
 
 ## Limites conhecidos
 
